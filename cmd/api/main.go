@@ -3,87 +3,80 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
+	"github.com/mattn/go-sqlite3"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
 
-const (
-	TARGET_GROUP_NAME = "Católicos suaves  ✨✨🙏" // Nome do grupo
-	TARGET_EMOJI      = "💩"                     // Emoji que você quer validar
-)
-
-var TARGET_GROUP_ID string // Será preenchido dinamicamente
-
 func eventHandler(evt interface{}) {
+	var GROUP_JID string = os.Getenv("GROUP_JID")
+	var TARGET_EMOJI string = os.Getenv("EMOJI")
+
 	switch v := evt.(type) {
 	case *events.Message:
 		// Filtra apenas mensagens do grupo específico
-		if v.Info.Chat.String() != TARGET_GROUP_ID {
+		if v.Info.Chat.String() != GROUP_JID {
 			return
 		}
 
-		// Verifica se a mensagem contém texto
-		if v.Message.GetConversation() == "" &&
-			v.Message.GetExtendedTextMessage() == nil {
-			return
-		}
+		// Log para debug - ver todas as mensagens recebidas
+		fmt.Printf("📱 Mensagem recebida de: %s\n", v.Info.Sender.User)
 
-		// Obtém o texto da mensagem
+		// Obtém o texto da mensagem de forma mais abrangente
 		var messageText string
+
+		// Verifica diferentes tipos de mensagem
 		if v.Message.GetConversation() != "" {
 			messageText = v.Message.GetConversation()
+			fmt.Printf("Texto (Conversation): '%s'\n", messageText)
 		} else if v.Message.GetExtendedTextMessage() != nil {
 			messageText = v.Message.GetExtendedTextMessage().GetText()
+			fmt.Printf("Texto (Extended): '%s'\n", messageText)
+		} else {
+			// Mensagem sem texto identificável
+			fmt.Println("Mensagem sem texto ou tipo não suportado")
+			return
 		}
-		// verifica se é igual ao emoji
-		if strings.TrimSpace(messageText) == TARGET_EMOJI {
-			fmt.Printf("✅ Emoji encontrado! Remetente: %s\n", v.Info.Sender.User)
 
-			// Aqui você pode aplicar sua lógica de negócio
+		// Verifica se é igual ao emoji
+		if messageText == TARGET_EMOJI {
+			fmt.Printf("Emoji encontrado! Remetente: %s\n", v.Info.Sender.User)
 			processValidEmoji(v)
 		}
 
 	case *events.Connected:
 		fmt.Println("🔗 Conectado ao WhatsApp")
-
 	case *events.Disconnected:
 		fmt.Println("❌ Desconectado do WhatsApp")
 	}
 }
 
 func processValidEmoji(msg *events.Message) {
-	// Sua lógica de negócio aqui
-	fmt.Printf("Processando emoji válido de: %s às %s\n",
+	fmt.Printf(" Processando emoji válido de: %s às %s\n",
 		msg.Info.Sender.User,
 		msg.Info.Timestamp.Format("15:04:05"))
 
-	// Exemplo: contar, salvar em BD, enviar notificação, etc.
+	// Sua lógica de negócio aqui
 }
 
-func findGroupByName(client *whatsmeow.Client, groupName string) (string, error) {
-	groups, err := client.GetJoinedGroups()
-	if err != nil {
-		return "", err
-	}
-
-	for _, group := range groups {
-		info, err := client.GetGroupInfo(group)
-		if err != nil {
-			continue 5
-		}
-		if info.Name == groupName {
-			return group.String(), nil
-		}
-	}
-	return "", fmt.Errorf("grupo '%s' não encontrado", groupName)
-}
 func main() {
-	dbLog := waLog.Stdout("Database", "DEBUG", true)
+	// Carregar as variáveis de ambiente
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatalf("Error loading .env file: %s", err)
+	}
+
+	sqlite3.Version() // Verifica se o driver está funcionando
+	dbLog := waLog.Stdout("Database", "WARN", true)
 	ctx := context.Background()
 
 	container, err := sqlstore.New(ctx, "sqlite3", "file:examplestore.db?_foreign_keys=on", dbLog)
@@ -96,7 +89,7 @@ func main() {
 		panic(err)
 	}
 
-	clientLog := waLog.Stdout("Client", "DEBUG", true)
+	clientLog := waLog.Stdout("Client", "WARN", true)
 	client := whatsmeow.NewClient(deviceStore, clientLog)
 	client.AddEventHandler(eventHandler)
 
@@ -124,18 +117,14 @@ func main() {
 	}
 
 	// Aguarda conexão estabilizar
-	fmt.Println("Aguardando conexão...")
-	time.Sleep(3 * time.Second)
-
-	// Busca o ID do grupo pelo nome
-	groupID, err := findGroupByName(client, TARGET_GROUP_NAME)
-	if err != nil {
-		panic(fmt.Sprintf("Erro ao buscar grupo: %v", err))
-	}
-
-	TARGET_GROUP_ID = groupID
-	fmt.Printf("✅ Grupo '%s' encontrado: %s\n", TARGET_GROUP_NAME, TARGET_GROUP_ID)
+	fmt.Println("⏳ Aguardando conexão...")
+	time.Sleep(2 * time.Second)
 
 	// Mantém o programa rodando
-	select {}
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	<-c
+
+	fmt.Println("Desconectando...")
+	client.Disconnect()
 }
