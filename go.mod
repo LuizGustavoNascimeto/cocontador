@@ -7,6 +7,8 @@ require (
 	go.mau.fi/whatsmeow v0.0.0-20250521125706-91ac75c2f61a
 )
 
+require github.com/lib/pq v1.10.9 // indirect
+
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
