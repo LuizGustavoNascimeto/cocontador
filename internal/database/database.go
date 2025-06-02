@@ -12,7 +12,7 @@ import (
 func NewDeviceStore(ctx context.Context, dbURL string, logger waLog.Logger) (*store.Device, error) {
 	sqlite3.Version()
 
-	container, err := sqlstore.New(ctx, "sqlite3", "file:examplestore.db?_foreign_keys=on", logger)
+	container, err := sqlstore.New(ctx, "postgres", "file:examplestore.db?_foreign_keys=on", logger)
 	// If you want multiple sessions, remember their JIDs and use .GetDevice(jid) or .GetAllDevices() instead.
 
 	if err != nil {
@@ -24,4 +24,5 @@ func NewDeviceStore(ctx context.Context, dbURL string, logger waLog.Logger) (*st
 		return nil, err
 	}
 	return deviceStore, nil
+
 }
