@@ -10,14 +10,69 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3"
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
+	"google.golang.org/protobuf/proto"
 )
 
-func eventHandler(evt interface{}) {
+type MyClient struct {
+	WAClient       *whatsmeow.Client
+	eventHandlerID uint32
+}
+
+// NewMyClient cria uma nova instância do MyClient
+func NewMyClient(client *whatsmeow.Client) *MyClient {
+	return &MyClient{
+		WAClient: client,
+	}
+}
+
+// register registra o event handler
+func (mycli *MyClient) register() {
+	mycli.eventHandlerID = mycli.WAClient.AddEventHandler(mycli.eventHandler)
+}
+
+// unregister remove o event handler
+func (mycli *MyClient) unregister() {
+	mycli.WAClient.RemoveEventHandler(mycli.eventHandlerID)
+}
+
+// connect conecta ao WhatsApp
+func (mycli *MyClient) connect() error {
+	if mycli.WAClient.Store.ID == nil {
+		// Primeiro uso - precisa do QR code
+		qrChan, _ := mycli.WAClient.GetQRChannel(context.Background())
+		err := mycli.WAClient.Connect()
+		if err != nil {
+			return err
+		}
+		for evt := range qrChan {
+			if evt.Event == "code" {
+				fmt.Println("QR code:", evt.Code)
+			} else {
+				fmt.Println("Login event:", evt.Event)
+			}
+		}
+	} else {
+		// Já tem sessão salva
+		err := mycli.WAClient.Connect()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// disconnect desconecta do WhatsApp
+func (mycli *MyClient) disconnect() {
+	mycli.WAClient.Disconnect()
+}
+
+func (mycli *MyClient) eventHandler(evt interface{}) {
 	var GROUP_JID string = os.Getenv("GROUP_JID")
 	var TARGET_EMOJI string = os.Getenv("EMOJI")
 
@@ -29,8 +84,7 @@ func eventHandler(evt interface{}) {
 		}
 
 		// Log para debug - ver todas as mensagens recebidas
-		fmt.Printf("📱 Mensagem recebida de: %s\n", v.Info.Sender.User)
-
+🧿
 		// Obtém o texto da mensagem de forma mais abrangente
 		var messageText string
 
@@ -50,7 +104,7 @@ func eventHandler(evt interface{}) {
 		// Verifica se é igual ao emoji
 		if messageText == TARGET_EMOJI {
 			fmt.Printf("Emoji encontrado! Remetente: %s\n", v.Info.Sender.User)
-			processValidEmoji(v)
+			mycli.processValidEmoji(v)
 		}
 
 	case *events.Connected:
@@ -60,12 +114,15 @@ func eventHandler(evt interface{}) {
 	}
 }
 
-func processValidEmoji(msg *events.Message) {
-	fmt.Printf(" Processando emoji válido de: %s às %s\n",
+func (mycli *MyClient) processValidEmoji(msg *events.Message) {
+	fmt.Printf("✅ Processando emoji válido de: %s às %s\n",
 		msg.Info.Sender.User,
 		msg.Info.Timestamp.Format("15:04:05"))
-
 	// Sua lógica de negócio aqui
+	conversationMessage := "Mensagem recebida de " + msg.Info.PushName + " às " + msg.Info.Timestamp.Format("15:04:05") + ". Emoji processado com sucesso!\n Ass: Cocontador"
+	mycli.WAClient.SendMessage(context.Background(), msg.Info.Chat, &waE2E.Message{Conversation: proto.String(conversationMessage)})
+	fmt.Println("✅ Resposta enviada!")
+
 }
 
 func main() {
@@ -75,10 +132,8 @@ func main() {
 		log.Fatalf("Error loading .env file: %s", err)
 	}
 
-	sqlite3.Version() // Verifica se o driver está funcionando
 	dbLog := waLog.Stdout("Database", "WARN", true)
 	ctx := context.Background()
-
 	container, err := sqlstore.New(ctx, "sqlite3", "file:examplestore.db?_foreign_keys=on", dbLog)
 	if err != nil {
 		panic(err)
@@ -91,30 +146,19 @@ func main() {
 
 	clientLog := waLog.Stdout("Client", "WARN", true)
 	client := whatsmeow.NewClient(deviceStore, clientLog)
-	client.AddEventHandler(eventHandler)
+
+	// Cria instância do MyClient
+	myClient := NewMyClient(client)
+
+	// Registra o event handler
+	myClient.register()
 
 	// Conecta ao WhatsApp
-	if client.Store.ID == nil {
-		// Primeiro uso - precisa do QR code
-		qrChan, _ := client.GetQRChannel(context.Background())
-		err = client.Connect()
-		if err != nil {
-			panic(err)
-		}
-		for evt := range qrChan {
-			if evt.Event == "code" {
-				fmt.Println("QR code:", evt.Code)
-			} else {
-				fmt.Println("Login event:", evt.Event)
-			}
-		}
-	} else {
-		// Já tem sessão salva
-		err = client.Connect()
-		if err != nil {
-			panic(err)
-		}
+	err = myClient.connect()
+	if err != nil {
+		panic(err)
 	}
+	//exibir todos os grupos
 
 	// Aguarda conexão estabilizar
 	fmt.Println("⏳ Aguardando conexão...")
@@ -126,5 +170,6 @@ func main() {
 	<-c
 
 	fmt.Println("Desconectando...")
-	client.Disconnect()
+	myClient.unregister()
+	myClient.disconnect()
 }
