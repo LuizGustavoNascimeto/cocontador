@@ -24,7 +24,7 @@ func main() {
 	}
 
 	// Inicializa o log do SQLite (nível WARN)
-	dbLogger := waLog.Stdout("Database", "WARN", true)
+	dbLogger := waLog.Stdout("Whatsmeow", "WARN", true)
 
 	// Inicializa o store (SQLite) e obtém deviceStore
 	deviceStore, err := store.NewDeviceStore(context.Background(), cfg.DatabaseURL, dbLogger)

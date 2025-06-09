@@ -20,7 +20,7 @@ type MyClient struct {
 
 // NewWhatsMeowClient cria o *whatsmeow.Client a partir do store e do logger
 func NewWhatsMeowClient(deviceStore *store.Device, logger waLog.Logger) *whatsmeow.Client {
-	return whatsmeow.NewClient(deviceStore, logger)
+	return whatsmeow.NewClient(deviceStore, nil)
 }
 
 // NewMyClient recebe o whatsmeow.Client já criado e a configuração
