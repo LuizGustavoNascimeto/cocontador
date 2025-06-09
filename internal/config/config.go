@@ -8,7 +8,7 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string // ex.: "file:examplestore.db?_foreign_keys=on"
+	DatabaseURL string
 	GroupJID    string
 	TargetEmoji string
 }
@@ -29,9 +29,14 @@ func LoadConfig(envFile string) (*Config, error) {
 	if emoji == "" {
 		return nil, fmt.Errorf("EMOJI não definido no ambiente")
 	}
+	postgresURL := os.Getenv("DB_URL")
+	if postgresURL == "" {
+		postgresURL = "postgres://postgres:@localhost:5432/whatsapp_db?sslmode=disable"
+	}
 
 	return &Config{
 		GroupJID:    group,
 		TargetEmoji: emoji,
+		DatabaseURL: postgresURL,
 	}, nil
 }
