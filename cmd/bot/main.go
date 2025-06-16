@@ -47,6 +47,9 @@ func main() {
 		log.Fatalf("erro ao conectar ao WhatsApp: %v", err)
 	}
 
+	//sessão já existe, supostamente desativa o bd.
+	myClient.WAClient.Store.ID = nil
+
 	// Daqui em diante, apenas aguarda sinal de interrupção para desconectar
 	fmt.Println("⏳ Aguardando conexão estabilizar...")
 	time.Sleep(2 * time.Second)
