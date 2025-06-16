@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types/events"
-	"google.golang.org/protobuf/proto"
 )
 
 // eventHandler é o callback que o whatsmeow chama para cada evento
@@ -51,19 +49,17 @@ func (mc *MyClient) eventHandler(evt interface{}) {
 func (mc *MyClient) processValidEmoji(msg *events.Message) {
 	timestamp := getCorrectTime(msg)
 	remetente := msg.Info.Sender.User
-	pushName := msg.Info.PushName
+	// pushName := msg.Info.PushName
 	chat := msg.Info.Chat
+	senderJID := msg.Info.Sender
+	targetMessageID := msg.Info.ID
 
+	//prepara a resposta
 	fmt.Printf("✅ Emoji válido recebido de %s às %s\n", remetente, timestamp)
-	resposta := fmt.Sprintf(
-		"Mensagem recebida de %s às %s. Emoji processado com sucesso!\nAss: Cocontador",
-		pushName, timestamp,
-	)
 
-	// Envia mensagem de volta para o grupo ou contato
-	if _, err := mc.WAClient.SendMessage(context.Background(), chat, &waE2E.Message{
-		Conversation: proto.String(resposta),
-	}); err != nil {
+	// reage a mensagem
+	_, err := mc.WAClient.SendMessage(context.Background(), chat, mc.WAClient.BuildReaction(chat, senderJID, targetMessageID, "👍"))
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "erro ao enviar resposta: %v\n", err)
 	} else {
 		fmt.Println("✅ Resposta enviada!")
