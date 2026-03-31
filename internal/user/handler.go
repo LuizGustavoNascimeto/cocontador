@@ -2,15 +2,17 @@ package user
 
 import "fmt"
 
-type UserHanlder interface {
+type IUserHandler interface {
 	Create(entity User) (User, error)
+	ListAll() (map[string]User, error)
+	CreateOrGet(entity User) (User, error)
 }
 
 type UserHandler struct {
 	repo UserRepository
 }
 
-var _ UserHanlder = (*UserHandler)(nil)
+var _ IUserHandler = (*UserHandler)(nil)
 
 func NewHandler() (*UserHandler, error) {
 	repo, err := NewRepository()
@@ -27,4 +29,14 @@ func (h *UserHandler) Create(entity User) (User, error) {
 
 func (h *UserHandler) ListAll() (map[string]User, error) {
 	return h.repo.ListAll()
+}
+func (h *UserHandler) CreateOrGet(entity User) (User, error) {
+	existing, err := h.repo.GetByID(entity.ID)
+	if err == nil {
+		return existing, nil
+	}
+	if err.Error() != fmt.Sprintf("user %s nao encontrado: sql: no rows in result set", entity.ID) {
+		return User{}, err
+	}
+	return h.repo.Create(entity)
 }

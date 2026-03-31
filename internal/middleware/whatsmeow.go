@@ -21,9 +21,11 @@ import (
 func eventHandler(evt interface{}) {
 	switch v := evt.(type) {
 	case *events.Message:
-		err := manager.MesssageManager(v)
-		if err != nil {
-			fmt.Println("Error handling message:", err)
+		if manager.MsgIsValid(v) {
+			err := manager.MesssageManager(v)
+			if err != nil {
+				fmt.Println("Error handling message:", err)
+			}
 		}
 	}
 }
